@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes de Gastos</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 450 450'><circle cx='225' cy='225' r='225' fill='%23D8BFD8'/><g transform='translate(1.5, 11)'><path fill='white' stroke='%23333' stroke-width='10' id='skull-outline' stroke-linejoin='round' d='M19.62 188.39A166.62 166.62 0 0 1 186.24 21.77c115.25 0 166.61 74.59 166.61 166.62 0 1.83-.08 3.64-.13 5.46h.13s.68 175.09.68 178.65c0 30.11-16.26 41.67-36.32 41.67-12.7 0-35.22-3.93-36.22-32.69h-.2c-1 28.76-16.81 32.69-36.22 32.69-18 0-32.87-6.78-35.77-32.53-2.9 25.75-17.8 32.53-35.8 32.53-20.06 0-36.32-11.56-36.32-41.67 0-2.48.36-24.88.36-24.88A166.68 166.68 0 0 1 19.62 188.39Z' /><path id='eyes-and-nose' fill='%23333' d='M180.77 205.76c0 23.64 12.84 41.81 28.68 41.81s28.68-19.17 28.68-41.81-12.84-41.82-28.68-41.82-28.68 19.17-28.68 41.82M275 205.76c0 23.64 12.84 41.81 28.68 41.81s28.68-19.17 28.68-41.81-12.84-41.82-28.68-41.82S275 182.11 275 205.76M264.51 276.85s-29.26 43.53-20.12 49.23c7.07 4.41 20.49-16.71 20.49-16.71s12.82 22.58 16.76 20c16.24-10.71-17.13-52.5-17.13-52.5'/><path id='jawline' fill='none' stroke='%23333' stroke-width='10' stroke-linecap='round' d='M114.92 284.33c22.54-1 22 7 22 62.48' /></g></svg>">
+    <!-- Tailwind CSS para un diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerías para generar el PDF (jsPDF y jsPDF-AutoTable) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        /* Estilo para un scroll suave y una apariencia limpia */
+        body { font-family: 'Inter', sans-serif; }
+        .entry-row:hover .delete-btn { opacity: 1; }
+        .history-item:hover { background-color: #f9fafb; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #3498db;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Estilos para las pestañas */
+        .tab-btn.active {
+            border-color: #4f46e5;
+            color: #4f46e5;
+            background-color: #eef2ff;
+        }
+        /* Estilos para la notificación (toast) */
+        @keyframes fade-in-out {
+            0% { opacity: 0; transform: translateY(20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(20px); }
+        }
+        .animate-fade-in-out {
+            animation: fade-in-out 3s ease-in-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen py-8">
+
+    <div class="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-lg p-8 m-4">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Panel de Control</h1>
+            <p class="text-gray-500 mt-2">Gestione sus reportes y asesoras desde un solo lugar.</p>
+        </div>
+
+        <!-- Contenedor de Pestañas -->
+        <div class="mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                    <button id="tab-gastos-btn" class="tab-btn active whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">
+                        Reporte de Gastos
+                    </button>
+                    <button id="tab-asesoras-btn" class="tab-btn text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">
+                        Registro de Asesoras
+                    </button>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Contenido de las Pestañas -->
+        <div id="tab-content">
+            <!-- Pestaña 1: Reporte de Gastos -->
+            <div id="tab-gastos-content">
+                <div class="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <label for="list-input" class="block mb-2 text-sm font-medium text-gray-700">1. Pega tu lista aquí (formato: Nombre – Bs.Monto):</label>
+                    <textarea id="list-input" rows="6" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Greiz Condori Conde – Bs.918,62&#10;..."></textarea>
+                    <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="sm:col-span-1">
+                             <label for="list-city-select" class="block mb-1 text-xs font-medium text-gray-600">2. Asigna una ciudad a la lista:</label>
+                            <select id="list-city-select" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"></select>
+                        </div>
+                        <div class="sm:col-span-2 self-end">
+                            <button id="process-list-btn" class="w-full h-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg">Procesar Lista</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="entries-container" class="space-y-4 mb-6"></div>
+
+                <button id="add-row-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mb-6">+ Añadir Fila Manualmente</button>
+
+                <div class="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                    <div class="mb-6">
+                         <h2 class="text-lg font-semibold text-gray-700 mb-4 text-center">Configuración Final del Reporte</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="sm:col-span-1">
+                                <label for="report-title" class="block mb-2 text-sm font-medium text-gray-700">Título del Reporte:</label>
+                                <input type="text" id="report-title" class="w-full p-3 border border-gray-300 rounded-lg" value="Gastos de Publicidad">
+                            </div>
+                            <div class="sm:col-span-2 grid grid-cols-2 gap-2">
+                                <div>
+                                    <label for="fecha-inicio" class="block mb-2 text-sm font-medium text-gray-700">Fecha de Inicio:</label>
+                                    <input type="date" id="fecha-inicio" class="w-full p-3 border border-gray-300 rounded-lg">
+                                </div>
+                                <div>
+                                    <label for="fecha-fin" class="block mb-2 text-sm font-medium text-gray-700">Fecha de Fin:</label>
+                                    <input type="date" id="fecha-fin" class="w-full p-3 border border-gray-300 rounded-lg">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-6 border-gray-200">
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="text-center sm:text-left">
+                            <p class="text-gray-500 text-lg">Suma Total General:</p>
+                            <p id="total-sum" class="text-3xl font-extrabold text-gray-900">Bs. 0.00</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="register-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg disabled:bg-gray-400 flex items-center gap-2">
+                                <span id="register-btn-text">Registrar</span>
+                                <div id="register-loader" class="loader hidden"></div>
+                            </button>
+                            <button id="download-pdf-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg disabled:bg-gray-400">Descargar PDF</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-8">
+                    <h2 class="text-xl font-bold text-gray-800 text-center mb-4">Historial de Reportes Guardados</h2>
+                    <div id="history-container" class="space-y-3">
+                        <p id="history-loading" class="text-center text-gray-500">Cargando historial...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pestaña 2: Registro de Asesoras -->
+            <div id="tab-asesoras-content" class="hidden">
+
+                 <!-- Panel de Asesoras Registradas -->
+                 <div class="mb-8">
+                    <h2 class="text-xl font-bold text-gray-800 text-center mb-4">Panel de Asesoras Registradas</h2>
+                    <div class="mb-4">
+                        <input type="text" id="asesora-search" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Buscar por nombre o número de WhatsApp...">
+                    </div>
+                    <div class="hidden md:grid grid-cols-12 gap-4 px-3 py-2 text-xs font-bold text-gray-500 uppercase bg-gray-50 rounded-t-lg">
+                        <div class="col-span-3">Nombre</div>
+                        <div class="col-span-2">WhatsApp</div>
+                        <div class="col-span-2">Sucursal</div>
+                        <div class="col-span-3">Fecha de Registro</div>
+                        <div class="col-span-2 text-right">Acciones</div>
+                    </div>
+                    <div id="asesoras-list-container" class="space-y-1 max-h-96 overflow-y-auto bg-white rounded-b-lg">
+                        <p id="asesoras-loading" class="text-center text-gray-500 p-4">Cargando asesoras...</p>
+                    </div>
+                 </div>
+
+                 <div class="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4 text-center">Registrar Nueva Asesora</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="asesora-nombre" class="block mb-2 text-sm font-medium text-gray-700">Nombre de Asesora:</label>
+                            <input type="text" id="asesora-nombre" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ej: Maria Gonzales">
+                        </div>
+                        <div>
+                            <label for="asesora-whatsapp" class="block mb-2 text-sm font-medium text-gray-700">Número de WhatsApp:</label>
+                            <input type="text" id="asesora-whatsapp" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="Ej: 71234567">
+                        </div>
+                        <div>
+                             <label for="asesora-sucursal" class="block mb-2 text-sm font-medium text-gray-700">Sucursal:</label>
+                             <select id="asesora-sucursal" class="w-full p-3 border border-gray-300 rounded-lg"></select>
+                        </div>
+                        <button id="register-asesora-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2">
+                            <span id="register-asesora-btn-text">Registrar Asesora</span>
+                            <div id="register-asesora-loader" class="loader hidden"></div>
+                        </button>
+                    </div>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Vista Previa -->
+    <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
+                <h2 id="modal-title" class="text-xl font-bold text-gray-800">Detalle del Reporte</h2>
+                <button id="modal-close-btn" class="text-3xl font-light text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <div id="modal-content" class="p-6 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- Contenedor para notificaciones (Toast) -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50"></div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- CONSTANTES Y VARIABLES GLOBALES ---
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwXPHBXiCy9Wds94Umde_feld6Y0sqfPcColsWFnvf-LBvlDL1vmQEC9sZ52rM8CDc5/exec";
+        const cities = ["Beni", "Sucre", "Cochabamba", "La Paz", "Oruro", "Pando", "Potosí", "Santa Cruz", "El Alto", "Tarija", "EXTRA"];
+        let allAdvisors = []; // Para guardar la lista completa de asesoras
+        
+        // --- ELEMENTOS DEL DOM (PESTAÑA 1) ---
+        const entriesContainer = document.getElementById('entries-container');
+        const addRowBtn = document.getElementById('add-row-btn');
+        const totalSumEl = document.getElementById('total-sum');
+        const downloadPdfBtn = document.getElementById('download-pdf-btn');
+        const listInput = document.getElementById('list-input');
+        const processListBtn = document.getElementById('process-list-btn');
+        const listCitySelect = document.getElementById('list-city-select');
+        const reportTitleInput = document.getElementById('report-title');
+        const fechaInicioInput = document.getElementById('fecha-inicio');
+        const fechaFinInput = document.getElementById('fecha-fin');
+        const registerBtn = document.getElementById('register-btn');
+        const registerBtnText = document.getElementById('register-btn-text');
+        const registerLoader = document.getElementById('register-loader');
+        const historyContainer = document.getElementById('history-container');
+        const historyLoading = document.getElementById('history-loading');
+        
+        // --- ELEMENTOS DEL DOM (PESTAÑA 2) ---
+        const asesoraNombreInput = document.getElementById('asesora-nombre');
+        const asesoraWhatsappInput = document.getElementById('asesora-whatsapp');
+        const asesoraSucursalSelect = document.getElementById('asesora-sucursal');
+        const registerAsesoraBtn = document.getElementById('register-asesora-btn');
+        const registerAsesoraBtnText = document.getElementById('register-asesora-btn-text');
+        const registerAsesoraLoader = document.getElementById('register-asesora-loader');
+        const asesoraSearchInput = document.getElementById('asesora-search');
+        const asesorasListContainer = document.getElementById('asesoras-list-container');
+        const asesorasLoading = document.getElementById('asesoras-loading');
+        
+        // --- ELEMENTOS DEL DOM (PESTAÑAS Y MODAL) ---
+        const tabGastosBtn = document.getElementById('tab-gastos-btn');
+        const tabAsesorasBtn = document.getElementById('tab-asesoras-btn');
+        const tabGastosContent = document.getElementById('tab-gastos-content');
+        const tabAsesorasContent = document.getElementById('tab-asesoras-content');
+        const modal = document.getElementById('preview-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalContent = document.getElementById('modal-content');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const toastContainer = document.getElementById('toast-container');
+
+        // --- LÓGICA DE NOTIFICACIONES (TOAST) ---
+        const showToast = (message, isError = false) => {
+            const toast = document.createElement('div');
+            const bgColor = isError ? 'bg-red-500' : 'bg-green-500';
+            toast.className = `animate-fade-in-out ${bgColor} text-white py-2 px-4 rounded-lg shadow-lg mb-2`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        };
+
+        // --- LÓGICA DE COPIADO ---
+        window.copyToClipboard = (text, type) => {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast(`${type} copiado: ${text}`);
+            } catch (err) {
+                console.error('Error al copiar:', err);
+                showToast('No se pudo copiar el texto.', true);
+            }
+            document.body.removeChild(textarea);
+        };
+
+        // --- LÓGICA DE PESTAÑAS ---
+        const switchTab = (tab) => {
+            if (tab === 'gastos') {
+                tabGastosContent.classList.remove('hidden');
+                tabAsesorasContent.classList.add('hidden');
+                tabGastosBtn.classList.add('active');
+                tabAsesorasBtn.classList.remove('active');
+            } else {
+                tabGastosContent.classList.add('hidden');
+                tabAsesorasContent.classList.remove('hidden');
+                tabGastosBtn.classList.remove('active');
+                tabAsesorasBtn.classList.add('active');
+                loadAdvisors();
+            }
+        };
+
+        tabGastosBtn.addEventListener('click', () => switchTab('gastos'));
+        tabAsesorasBtn.addEventListener('click', () => switchTab('asesoras'));
+
+        // --- FUNCIONES DE INICIALIZACIÓN ---
+        const initializeDates = () => {
+            const now = new Date();
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            fechaInicioInput.value = firstDayOfMonth.toISOString().split('T')[0];
+            fechaFinInput.value = lastDayOfMonth.toISOString().split('T')[0];
+        };
+
+        const populateSelect = (selectElement) => {
+            selectElement.innerHTML = cities.map(city => `<option value="${city}">${city}</option>`).join('');
+        };
+        
+        // --- LÓGICA DE ASESORAS (PESTAÑA 2) ---
+        const cityColorMap = {
+            "Beni": "bg-teal-100 text-teal-800", "Sucre": "bg-red-100 text-red-800",
+            "Cochabamba": "bg-green-100 text-green-800", "La Paz": "bg-sky-100 text-sky-800",
+            "Oruro": "bg-orange-100 text-orange-800", "Pando": "bg-lime-100 text-lime-800",
+            "Potosí": "bg-gray-200 text-gray-800", "Santa Cruz": "bg-emerald-100 text-emerald-800",
+            "El Alto": "bg-blue-100 text-blue-800", "Tarija": "bg-rose-100 text-rose-800",
+            "EXTRA": "bg-indigo-100 text-indigo-800"
+        };
+        
+        const displayAdvisors = (advisors) => {
+            asesorasListContainer.innerHTML = '';
+            if (advisors.length === 0) {
+                asesorasListContainer.innerHTML = `<p class="text-center text-gray-500 p-4">No se encontraron asesoras.</p>`;
+                return;
+            }
+            advisors.forEach(advisor => {
+                if (!advisor || !advisor.nombre) return; // Filtro de seguridad
+                const colorClass = cityColorMap[advisor.sucursal] || "bg-gray-100 text-gray-800";
+                const advisorEl = document.createElement('div');
+                advisorEl.className = 'grid grid-cols-12 gap-4 items-center p-3 border-b';
+                
+                const formattedDate = new Date(advisor.timestamp).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                advisorEl.innerHTML = `
+                    <div class="col-span-12 md:col-span-3 font-bold text-gray-800 flex items-center">
+                        <span>${advisor.nombre}</span>
+                        <button class="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded" title="Copiar nombre" onclick="copyToClipboard('${advisor.nombre}', 'Nombre')">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                    </div>
+                    <div class="col-span-6 md:col-span-2 text-gray-600 flex items-center">
+                        <span>${advisor.whatsapp}</span>
+                        <button class="ml-2 p-1 text-gray-400 hover:text-gray-600 rounded" title="Copiar WhatsApp" onclick="copyToClipboard('${advisor.whatsapp}', 'WhatsApp')">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
+                    </div>
+                    <div class="col-span-6 md:col-span-2">
+                        <span class="text-xs font-medium px-2.5 py-0.5 rounded-full ${colorClass}">${advisor.sucursal}</span>
+                    </div>
+                    <div class="col-span-12 md:col-span-3 text-gray-500 text-sm">${formattedDate}</div>
+                    <div class="col-span-12 md:col-span-2 text-right">
+                         <button class="delete-advisor-btn text-red-500 hover:text-red-700 p-1 rounded-full" title="Eliminar asesora">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                         </button>
+                    </div>
+                `;
+                advisorEl.querySelector('.delete-advisor-btn').addEventListener('click', (e) => deleteAdvisor(advisor.timestamp, e.currentTarget));
+                asesorasListContainer.appendChild(advisorEl);
+            });
+        };
+        
+        const loadAdvisors = async () => {
+            asesorasLoading.classList.remove('hidden');
+            asesorasListContainer.innerHTML = ''; 
+            asesorasListContainer.appendChild(asesorasLoading);
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getAdvisors`);
+                if (!response.ok) throw new Error('Error al obtener la lista de asesoras.');
+                allAdvisors = await response.json();
+                displayAdvisors(allAdvisors);
+            } catch (error) {
+                console.error("Error al cargar asesoras:", error);
+                asesorasListContainer.innerHTML = `<p class="text-center text-red-500 p-4">Error al cargar la lista.</p>`;
+            } finally {
+                asesorasLoading.classList.add('hidden');
+            }
+        };
+        
+        asesoraSearchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredAdvisors = allAdvisors.filter(advisor => {
+                const nameMatch = advisor.nombre && advisor.nombre.toLowerCase().includes(searchTerm);
+                const whatsappMatch = advisor.whatsapp && advisor.whatsapp.toString().toLowerCase().includes(searchTerm);
+                return nameMatch || whatsappMatch;
+            });
+            displayAdvisors(filteredAdvisors);
+        });
+
+        // --- FUNCIONES DE MANIPULACIÓN DE FILAS (GASTOS) ---
+        const createCitySelectHTML = (selectedCity = 'EXTRA') => `<select class="city-select w-full p-3 border border-gray-300 rounded-lg">${cities.map(city => `<option value="${city}" ${city === selectedCity ? 'selected' : ''}>${city}</option>`).join('')}</select>`;
+        const createEntryRow = (name = '', amount = '', city = 'EXTRA') => {
+            const rowId = `row-${Date.now()}-${Math.random()}`;
+            const row = document.createElement('div');
+            row.id = rowId;
+            row.className = 'entry-row grid grid-cols-1 md:grid-cols-12 gap-3 items-center';
+            row.innerHTML = `<div class="md:col-span-5"><input type="text" value="${name}" placeholder="Nombre o Descripción" class="name-input w-full p-3 border border-gray-300 rounded-lg"></div><div class="md:col-span-3">${createCitySelectHTML(city)}</div><div class="md:col-span-3"><input type="number" value="${amount}" placeholder="Monto (Bs.)" min="0" step="0.01" class="amount-input w-full p-3 border border-gray-300 rounded-lg"></div><div class="md:col-span-1 text-right"><button class="delete-btn text-red-500 hover:text-red-700 p-2 rounded-full opacity-50 hover:opacity-100" onclick="deleteRow('${rowId}')"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div>`;
+            entriesContainer.appendChild(row);
+            row.querySelector('.amount-input').addEventListener('input', calculateTotal);
+        };
+        window.deleteRow = (rowId) => {
+            document.getElementById(rowId)?.remove();
+            calculateTotal();
+        };
+
+        // --- FUNCIONES DE CÁLCULO Y LÓGICA (GASTOS) ---
+        const calculateTotal = () => {
+            const amounts = [...entriesContainer.querySelectorAll('.amount-input')].map(i => parseFloat(i.value) || 0);
+            const total = amounts.reduce((sum, value) => sum + value, 0);
+            totalSumEl.textContent = `Bs. ${total.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            const hasData = total > 0;
+            downloadPdfBtn.disabled = !hasData;
+            registerBtn.disabled = !hasData;
+        };
+        
+        const getReportData = () => {
+             const entries = [...entriesContainer.querySelectorAll('.entry-row')].map(row => ({ name: row.querySelector('.name-input').value.trim() || 'N/A', amount: parseFloat(row.querySelector('.amount-input').value) || 0, city: row.querySelector('.city-select').value })).filter(e => e.amount > 0);
+            const total = entries.reduce((sum, entry) => sum + entry.amount, 0);
+            const baseTitle = reportTitleInput.value.trim() || "Reporte de Gastos";
+            const startDate = fechaInicioInput.value;
+            const fechaInicioForTitle = new Date(startDate + 'T00:00:00');
+            let monthName = fechaInicioForTitle.toLocaleString('es-ES', { month: 'long' });
+            monthName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+            const year = fechaInicioForTitle.getFullYear();
+            const dynamicTitle = `${monthName} ${baseTitle} ${year}`;
+            return { title: dynamicTitle, startDate: startDate, endDate: fechaFinInput.value, total: total, entries: entries };
+        };
+
+        // --- FUNCIONES DE PDF ---
+        const generatePDF = (reportData) => {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const { title, startDate, endDate, total, entries } = reportData;
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            const fechaInicio = new Date(startDate + 'T00:00:00');
+            const fechaFin = new Date(endDate + 'T00:00:00');
+            const dateRange = (startDate && endDate) ? `Del ${fechaInicio.toLocaleDateString('es-ES', options)} al ${fechaFin.toLocaleDateString('es-ES', options)}` : '';
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            doc.text(title, 105, 20, { align: 'center' });
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            if (dateRange) doc.text(`Periodo: ${dateRange}`, 105, 28, { align: 'center' });
+            const groupedEntries = entries.reduce((acc, entry) => { (acc[entry.city] = acc[entry.city] || []).push([entry.name, entry.amount]); return acc; }, {});
+            let startY = dateRange ? 40 : 35;
+            const headColor = [22, 78, 99];
+            const footColor = [241, 245, 249]; 
+            cities.forEach(city => {
+                if (groupedEntries[city]) {
+                    const cityEntries = groupedEntries[city];
+                    const cityTotal = cityEntries.reduce((sum, entry) => sum + entry[1], 0);
+                    doc.autoTable({ startY: startY, head: [[{ content: city, colSpan: 2, styles: { halign: 'center' } }]], body: cityEntries.map(e => [e[0], e[1].toLocaleString('es-BO', {minimumFractionDigits: 2, maximumFractionDigits: 2})]), foot: [['Subtotal', cityTotal.toLocaleString('es-BO', {minimumFractionDigits: 2, maximumFractionDigits: 2})]], theme: 'grid', headStyles: { fillColor: headColor, textColor: 255, fontStyle: 'bold' }, footStyles: { fillColor: footColor, fontStyle: 'bold', textColor: [0, 0, 0] }, columnStyles: { 0: { cellWidth: 120 }, 1: { halign: 'right' } } });
+                    startY = doc.autoTable.previous.finalY + 10;
+                }
+            });
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`GASTO TOTAL GENERAL: Bs. ${total.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 105, startY + 5, { align: 'center' });
+            doc.save(`${title.replace(/ /g, '_')}.pdf`);
+        };
+
+        // --- FUNCIONES DE GOOGLE SHEETS ---
+        const registerReport = async () => {
+            const reportData = getReportData();
+            if (reportData.entries.length === 0) { alert("No hay datos para registrar."); return; }
+            registerBtn.disabled = true; registerBtnText.textContent = 'Registrando...'; registerLoader.classList.remove('hidden');
+            try {
+                await fetch(SCRIPT_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(reportData) });
+                alert("Reporte registrado con éxito. El historial se actualizará en breve.");
+                setTimeout(loadHistory, 2000); 
+            } catch (error) { console.error('Error al registrar:', error); alert("Hubo un error al registrar el reporte."); } finally { registerBtn.disabled = false; registerBtnText.textContent = 'Registrar'; registerLoader.classList.add('hidden'); }
+        };
+
+        const registerAsesora = async () => {
+            const nombre = asesoraNombreInput.value.trim();
+            const whatsapp = asesoraWhatsappInput.value.trim();
+            const sucursal = asesoraSucursalSelect.value;
+            if (!nombre || !whatsapp || !sucursal) { alert("Por favor, complete todos los campos."); return; }
+            const asesoraData = { nombre, whatsapp, sucursal };
+            registerAsesoraBtn.disabled = true; registerAsesoraBtnText.textContent = 'Registrando...'; registerAsesoraLoader.classList.remove('hidden');
+            try {
+                await fetch(`${SCRIPT_URL}?action=registerAsesora`, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(asesoraData) });
+                alert("Asesora registrada con éxito.");
+                asesoraNombreInput.value = ''; asesoraWhatsappInput.value = '';
+                loadAdvisors();
+            } catch (error) { console.error('Error al registrar asesora:', error); alert("Hubo un error al registrar la asesora."); } finally { registerAsesoraBtn.disabled = false; registerAsesoraBtnText.textContent = 'Registrar Asesora'; registerAsesoraLoader.classList.add('hidden'); }
+        };
+
+        const deleteAdvisor = async (timestamp, buttonElement) => {
+            if (!confirm("¿Estás seguro de que quieres eliminar este registro de asesora? Esta acción no se puede deshacer.")) return;
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = `<div class="loader !w-4 !h-4 !border-t-red-500"></div>`;
+            try {
+                await fetch(`${SCRIPT_URL}?action=deleteAdvisor`, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ timestamp }) });
+                showToast("Asesora eliminada con éxito.");
+                loadAdvisors();
+            } catch (error) {
+                console.error('Error al eliminar asesora:', error);
+                showToast("Hubo un error al eliminar la asesora.", true);
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>`;
+            }
+        };
+
+        const loadHistory = async () => {
+            historyLoading.textContent = "Cargando historial..."; historyContainer.innerHTML = ''; historyContainer.appendChild(historyLoading);
+            try {
+                const response = await fetch(SCRIPT_URL);
+                if (!response.ok) throw new Error('Error en la respuesta del servidor.');
+                let history = await response.json();
+                historyLoading.remove();
+                const validHistory = history.filter(item => item.fullData && typeof item.fullData === 'string' && item.fullData.trim().startsWith('{'));
+                if (validHistory.length === 0) { historyContainer.innerHTML = `<p class="text-center text-gray-500">${history.length > 0 ? 'Se encontraron registros, pero no son válidos para mostrar.' : 'No hay reportes guardados.'}</p>`; return; }
+                validHistory.forEach((item) => {
+                    try {
+                        const data = JSON.parse(item.fullData);
+                        const timestamp = new Date(item.timestamp);
+                        const historyItem = document.createElement('div');
+                        historyItem.className = 'history-item flex justify-between items-center p-3 border rounded-lg transition';
+                        historyItem.innerHTML = `<div><p class="font-bold text-gray-800">${data.title}</p><p class="text-sm text-gray-500">${timestamp.toLocaleString('es-ES')}</p></div><div class="flex gap-2"><button class="view-details-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-lg">Ver</button><button class="reprint-btn bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-3 rounded-lg">Reimprimir PDF</button></div>`;
+                        historyItem.querySelector('.view-details-btn').addEventListener('click', () => showReportModal(data));
+                        historyItem.querySelector('.reprint-btn').addEventListener('click', () => generatePDF(data));
+                        historyContainer.appendChild(historyItem);
+                    } catch(e) { console.error("Error procesando un item del historial:", item, e); }
+                });
+            } catch (error) {
+                console.error('Error al cargar el historial:', error);
+                let errorMessage = "Error al cargar el historial. ";
+                if (SCRIPT_URL.includes("/dev")) { errorMessage += "Estás usando una URL de desarrollo (/dev). Para que funcione, debes implementar tu script con acceso a 'Cualquier persona' y usar la URL de producción (/exec)."; } else { errorMessage += "Verifica que la URL del script sea correcta y que la implementación esté configurada para permitir el acceso a 'Cualquier persona'."; }
+                historyLoading.textContent = errorMessage;
+            }
+        };
+
+        // --- FUNCIONES DEL MODAL ---
+        const showReportModal = (reportData) => {
+            const { title, startDate, endDate, total, entries } = reportData;
+            modalTitle.textContent = title;
+            let contentHTML = '';
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            const fechaInicio = new Date(startDate + 'T00:00:00');
+            const fechaFin = new Date(endDate + 'T00:00:00');
+            const dateRange = (startDate && endDate) ? `Del ${fechaInicio.toLocaleDateString('es-ES', options)} al ${fechaFin.toLocaleDateString('es-ES', options)}` : '';
+            if (dateRange) { contentHTML += `<p class="text-center text-gray-600 mb-6">${dateRange}</p>`; }
+            const groupedEntries = entries.reduce((acc, entry) => { (acc[entry.city] = acc[entry.city] || []).push(entry); return acc; }, {});
+            cities.forEach(city => {
+                if (groupedEntries[city]) {
+                    let cityTotal = 0;
+                    contentHTML += `<div class="mb-6"><h3 class="text-lg font-semibold bg-gray-700 text-white p-2 rounded-t-md">${city}</h3><table class="w-full text-sm text-left text-gray-500"><thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr><th scope="col" class="px-6 py-3">Descripción</th><th scope="col" class="px-6 py-3 text-right">Monto (Bs.)</th></tr></thead><tbody>`;
+                    groupedEntries[city].forEach(entry => { contentHTML += `<tr class="bg-white border-b"><td class="px-6 py-4">${entry.name}</td><td class="px-6 py-4 text-right">${entry.amount.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr>`; cityTotal += entry.amount; });
+                    contentHTML += `</tbody><tfoot><tr class="font-semibold text-gray-900 bg-gray-100"><td class="px-6 py-3 text-right">Subtotal</td><td class="px-6 py-3 text-right">${cityTotal.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td></tr></tfoot></table></div>`;
+                }
+            });
+            contentHTML += `<div class="text-center mt-8 p-4 bg-gray-800 text-white rounded-lg"><p class="text-xl font-bold">GASTO TOTAL GENERAL: Bs. ${total.toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>`;
+            modalContent.innerHTML = contentHTML;
+            modal.classList.remove('hidden');
+        };
+        const hideModal = () => modal.classList.add('hidden');
+
+        // --- EVENT LISTENERS ---
+        addRowBtn.addEventListener('click', () => createEntryRow());
+        processListBtn.addEventListener('click', () => {
+            const text = listInput.value.trim();
+            if (!text) return;
+            const selectedCity = listCitySelect.value;
+            text.split('\n').forEach(line => {
+                const parts = line.split(' – Bs.');
+                if (parts.length === 2) {
+                    const name = parts[0].trim();
+                    const amountStr = parts[1].trim().replace(/\./g, '').replace(',', '.');
+                    const amount = parseFloat(amountStr);
+                    if (name && !isNaN(amount)) createEntryRow(name, amount, selectedCity);
+                }
+            });
+            calculateTotal();
+            listInput.value = '';
+        });
+        downloadPdfBtn.addEventListener('click', () => {
+            const reportData = getReportData();
+            if (reportData.entries.length === 0) { alert("No hay datos para generar el PDF."); return; }
+            generatePDF(reportData);
+        });
+        registerBtn.addEventListener('click', registerReport);
+        registerAsesoraBtn.addEventListener('click', registerAsesora);
+        modalCloseBtn.addEventListener('click', hideModal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+
+        // --- EJECUCIÓN INICIAL ---
+        initializeDates();
+        populateSelect(listCitySelect);
+        populateSelect(asesoraSucursalSelect);
+        createEntryRow();
+        calculateTotal();
+        loadHistory();
+    });
+    </script>
+</body>
+</html>
+
