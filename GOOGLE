@@ -1,0 +1,80 @@
+// ID de la hoja de cálculo específica donde se guardarán los datos.
+const SPREADSHEET_ID = "1MUvo94sQgpG6JDn4ITmTbGfGZrTGhwib2FLZBcVwdEE";
+// Hoja de cálculo activa donde se guardarán los datos.
+const SPREADSHEET = SpreadsheetApp.openById(SPREADSHEET_ID);
+// Nombre de la hoja específica para los reportes. Si no existe, se creará.
+const SHEET_NAME = "HistorialDeReportes";
+// Referencia a la hoja de cálculo.
+const SHEET = SPREADSHEET.getSheetByName(SHEET_NAME) || SPREADSHEET.insertSheet(SHEET_NAME);
+
+// Asegurarse de que la primera fila (encabezado) exista.
+function setup() {
+  const headers = ["Timestamp", "Título del Reporte", "Fecha de Inicio", "Fecha de Fin", "Monto Total", "Datos Completos (JSON)"];
+  if (SHEET.getLastRow() < 1) {
+    SHEET.appendRow(headers);
+    SHEET.getRange("A1:F1").setFontWeight("bold");
+    SHEET.setFrozenRows(1);
+  }
+}
+
+/**
+ * Función que se ejecuta cuando la aplicación web recibe una petición GET.
+ * Se usa para obtener el historial de reportes.
+ * @returns {ContentService.TextOutput} - El historial en formato JSON.
+ */
+function doGet(e) {
+  setup(); // Asegura que la hoja esté configurada.
+  const data = SHEET.getDataRange().getValues();
+  data.shift(); // Quita los encabezados
+  
+  const history = data.map(row => {
+    return {
+      timestamp: row[0],
+      title: row[1],
+      startDate: row[2],
+      endDate: row[3],
+      total: row[4],
+      fullData: row[5] // El JSON con todos los detalles
+    };
+  }).reverse(); // Mostrar los más recientes primero
+  
+  return ContentService.createTextOutput(JSON.stringify(history))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Función que se ejecuta cuando la aplicación web recibe una petición POST.
+ * Se usa para guardar un nuevo reporte.
+ * @param {object} e - El objeto del evento, contiene los datos enviados.
+ * @returns {ContentService.TextOutput} - Una respuesta de confirmación en JSON.
+ */
+function doPost(e) {
+  setup(); // Asegura que la hoja esté configurada.
+  try {
+    const reportData = JSON.parse(e.postData.contents);
+    
+    // Validar datos básicos
+    if (!reportData.title || !reportData.entries || !reportData.total) {
+      throw new Error("Faltan datos en la petición.");
+    }
+    
+    const newRow = [
+      new Date(),
+      reportData.title,
+      reportData.startDate,
+      reportData.endDate,
+      reportData.total,
+      JSON.stringify(reportData) // Guardar todos los datos para poder reimprimir
+    ];
+    
+    SHEET.appendRow(newRow);
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Reporte guardado con éxito." }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
