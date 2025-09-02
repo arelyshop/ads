@@ -203,6 +203,7 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwXPHBXiCy9Wds94Umde_feld6Y0sqfPcColsWFnvf-LBvlDL1vmQEC9sZ52rM8CDc5/exec";
         const cities = ["Beni", "Sucre", "Cochabamba", "La Paz", "Oruro", "Pando", "Potosí", "Santa Cruz", "El Alto", "Tarija", "EXTRA"];
         let allAdvisors = []; // Para guardar la lista completa de asesoras
+        let advisorsLoaded = false; // Flag para controlar la carga de asesoras
         
         // --- ELEMENTOS DEL DOM (PESTAÑA 1) ---
         const entriesContainer = document.getElementById('entries-container');
@@ -281,7 +282,9 @@
                 tabAsesorasContent.classList.remove('hidden');
                 tabGastosBtn.classList.remove('active');
                 tabAsesorasBtn.classList.add('active');
-                loadAdvisors();
+                if (!advisorsLoaded) { // <-- CARGA OPTIMIZADA
+                    loadAdvisors();
+                }
             }
         };
 
@@ -368,9 +371,11 @@
                 if (!response.ok) throw new Error('Error al obtener la lista de asesoras.');
                 allAdvisors = await response.json();
                 displayAdvisors(allAdvisors);
+                advisorsLoaded = true; // Marcar como cargado
             } catch (error) {
                 console.error("Error al cargar asesoras:", error);
                 asesorasListContainer.innerHTML = `<p class="text-center text-red-500 p-4">Error al cargar la lista.</p>`;
+                advisorsLoaded = false; // Permitir reintentar
             } finally {
                 asesorasLoading.classList.add('hidden');
             }
@@ -481,7 +486,7 @@
                 await fetch(`${SCRIPT_URL}?action=registerAsesora`, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(asesoraData) });
                 alert("Asesora registrada con éxito.");
                 asesoraNombreInput.value = ''; asesoraWhatsappInput.value = '';
-                loadAdvisors();
+                loadAdvisors(); // Recargar la lista
             } catch (error) { console.error('Error al registrar asesora:', error); alert("Hubo un error al registrar la asesora."); } finally { registerAsesoraBtn.disabled = false; registerAsesoraBtnText.textContent = 'Registrar Asesora'; registerAsesoraLoader.classList.add('hidden'); }
         };
 
@@ -492,7 +497,7 @@
             try {
                 await fetch(`${SCRIPT_URL}?action=deleteAdvisor`, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ timestamp }) });
                 showToast("Asesora eliminada con éxito.");
-                loadAdvisors();
+                loadAdvisors(); // Recargar la lista
             } catch (error) {
                 console.error('Error al eliminar asesora:', error);
                 showToast("Hubo un error al eliminar la asesora.", true);
