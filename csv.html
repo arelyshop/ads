@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Archivos CSV</title>
+    <!-- 1. Cargar Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 2. Usar una fuente limpia como Inter */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Estilo para el cuadro de texto del reporte */
+        textarea#reportOutput {
+            font-family: ui-monospace, "Courier New", monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <!-- Contenedor principal -->
+    <div class="container mx-auto max-w-6xl bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+        
+        <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Visor de Archivos CSV</h1>
+        <p class="text-gray-600 mb-6">Selecciona un archivo .csv de tu computadora para verlo como tabla.</p>
+
+        <!-- 3. Input para seleccionar el archivo -->
+        <input type="file" id="csvFileInput" accept=".csv" class="block w-full text-sm text-gray-500
+            file:mr-4 file:py-2 file:px-4
+            file:rounded-lg file:border-0
+            file:text-sm file:font-semibold
+            file:bg-blue-50 file:text-blue-700
+            hover:file:bg-blue-100 cursor-pointer mb-6
+        ">
+
+        <!-- Opciones de visualización -->
+        <div class="flex items-center my-4">
+            <input id="groupCheckbox" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+            <label for="groupCheckbox" class="ml-2 block text-sm text-gray-700 font-medium">
+                Agrupar por Asesora y sumar "Importe gastado (BOB)"
+            </label>
+        </div>
+
+        <!-- Área para mostrar errores o avisos -->
+        <div id="errorMessage" class="mt-4 text-red-600 font-medium"></div>
+        <div id="infoMessage" class="mt-2 text-blue-600 text-sm italic"></div>
+
+        <!-- 4. Contenedor de la tabla con scroll -->
+        <div id="table-container" class="border border-gray-200 rounded-lg overflow-auto max-h-[65vh] mt-4">
+            <table class="w-full min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50 sticky top-0" id="tableHeader">
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
+                    <tr>
+                        <td colspan="100" class="px-6 py-10 text-center text-gray-500">
+                            Por favor, carga un archivo CSV para ver los datos.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 6. Sección de Generador de Reporte -->
+        <div id="reportGenerator" class="mt-8 hidden">
+            <hr class="my-6">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">Generador de Reporte por Asesora</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Columna de Selección -->
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Selecciona las asesoras</h3>
+
+                    <!-- Filtro por Ciudad -->
+                    <div class="mb-3">
+                        <label for="cityFilterSelect" class="block text-sm font-medium text-gray-600">Filtrar por Ciudad</label>
+                        <select id="cityFilterSelect" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <option value="Todas">-- Todas las ciudades --</option>
+                        </select>
+                    </div>
+
+                    <!-- Botones de (Des)Marcar Todo -->
+                    <div class="flex items-center space-x-2 mb-3">
+                        <button id="selectAllButton" class="px-3 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors">
+                            Marcar todas (visibles)
+                        </button>
+                        <button id="deselectAllButton" class="px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+                            Desmarcar todas (visibles)
+                        </button>
+                    </div>
+
+                    <div id="selectorContainer" class="max-h-60 overflow-y-auto p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    </div>
+                </div>
+
+                <!-- Columna de Output y Copiado -->
+                <div>
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-lg font-semibold text-gray-700">Reporte para copiar</h3>
+                        <button id="clearReportButton" class="px-3 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-full hover:bg-red-200 transition-colors">
+                            Vaciar
+                        </button>
+                    </div>
+                    
+                    <textarea id="reportOutput" rows="10" readonly class="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Selecciona asesoras de la izquierda..."></textarea>
+                    
+                    <div class="flex items-center mt-3">
+                        <button id="copyButton" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copiar al Portapapeles
+                        </button>
+                        <span id="copyMessage" class="ml-4 text-sm font-medium text-green-600"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Elementos del DOM
+        const fileInput = document.getElementById('csvFileInput');
+        const groupCheckbox = document.getElementById('groupCheckbox');
+        const tableHeader = document.getElementById('tableHeader');
+        const tableBody = document.getElementById('tableBody');
+        const errorMessage = document.getElementById('errorMessage');
+        const infoMessage = document.getElementById('infoMessage');
+        const reportGenerator = document.getElementById('reportGenerator');
+        const selectorContainer = document.getElementById('selectorContainer');
+        const reportOutput = document.getElementById('reportOutput');
+        const copyButton = document.getElementById('copyButton');
+        const copyMessage = document.getElementById('copyMessage');
+        const cityFilterSelect = document.getElementById('cityFilterSelect');
+        const selectAllButton = document.getElementById('selectAllButton');
+        const deselectAllButton = document.getElementById('deselectAllButton');
+        const clearReportButton = document.getElementById('clearReportButton');
+
+        let rawDataStore = null;
+
+        // Mapa de ciudades para normalización
+        const departmentMap = {
+            'beni': 'Beni',
+            'chuquisaca': 'Chuquisaca',
+            'cochabamba': 'Cochabamba',
+            'la paz': 'La Paz',
+            'oruro': 'Oruro',
+            'pando': 'Pando',
+            'potosí': 'Potosí',
+            'santa cruz': 'Santa Cruz',
+            'tarija': 'Tarija',
+            'sucre': 'SUCRE',
+            'el alto': 'El Alto',
+            'scz': 'Santa Cruz'
+        };
+        const departmentSearchKeys = Object.keys(departmentMap);
+
+        // Listeners
+        fileInput.addEventListener('change', handleFileSelect);
+        groupCheckbox.addEventListener('change', processAndDisplayData);
+        copyButton.addEventListener('click', copyReportToClipboard);
+        selectAllButton.addEventListener('click', () => toggleAllCheckboxes(true));
+        deselectAllButton.addEventListener('click', () => toggleAllCheckboxes(false));
+        clearReportButton.addEventListener('click', clearReportAndSelection);
+
+        function handleFileSelect(event) {
+            errorMessage.textContent = '';
+            infoMessage.textContent = '';
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!file.name.endsWith('.csv')) {
+                 errorMessage.textContent = 'Error: Por favor, selecciona un archivo .csv válido.';
+                 resetTable();
+                 return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                try {
+                    rawDataStore = parseCSV(text);
+                    processAndDisplayData();
+                } catch (err) {
+                    errorMessage.textContent = 'Error al procesar el archivo.';
+                    resetTable();
+                    rawDataStore = null;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split(/\r?\n/);
+            if (lines.length === 0) return { header: [], rows: [] };
+            const header = lines.shift().split(',').map(h => h.trim().replace(/"/g, ''));
+            const rows = lines.map(line => line.split(',').map(cell => cell.trim().replace(/"/g, '')));
+            return { header, rows };
+        }
+
+        /**
+         * Busca el índice de la columna de importe gastado.
+         */
+        function findSpendColumnIndex(header) {
+            // Buscamos la coincidencia exacta o parcial ignorando mayúsculas
+            const target = "importe gastado (bob)".toLowerCase();
+            const targetSimple = "importe gastado".toLowerCase();
+            
+            let index = header.findIndex(h => {
+                const head = h.toLowerCase();
+                return head === target || head.includes(targetSimple);
+            });
+
+            // Si no se encuentra, por defecto usamos la columna 3 (índice 2)
+            if (index === -1) {
+                index = 2; 
+                infoMessage.textContent = "Aviso: No se encontró la columna 'Importe gastado (BOB)'. Usando columna 3 por defecto.";
+            } else {
+                infoMessage.textContent = `Columna de gasto detectada: "${header[index]}"`;
+            }
+            return index;
+        }
+
+        function processAndDisplayData() {
+            if (!rawDataStore) {
+                resetTable();
+                return;
+            }
+
+            const spendIdx = findSpendColumnIndex(rawDataStore.header);
+
+            if (groupCheckbox.checked) {
+                try {
+                    const aggregatedData = aggregateData(rawDataStore, spendIdx);
+                    displayTable(aggregatedData);
+                    populateSelector(aggregatedData.rows, spendIdx);
+                    reportGenerator.classList.remove('hidden');
+                } catch (err) {
+                     errorMessage.textContent = 'Error al agrupar.';
+                     displayTable(rawDataStore);
+                     reportGenerator.classList.add('hidden');
+                }
+            } else {
+                displayTable(rawDataStore);
+                reportGenerator.classList.add('hidden');
+            }
+        }
+
+        function aggregateData(data, spendIdx) {
+            const groupedData = new Map();
+            if (!data.rows || data.rows.length === 0) return data;
+
+            for (const row of data.rows) {
+                if (row.length <= spendIdx) continue;
+
+                const fullCol1 = row[0] || '';
+                let namePart = fullCol1.split('/')[0].trim();
+                if (namePart.startsWith('ADS EMPLEO')) namePart = 'ADS EMPLEO';
+
+                let foundCity = '';
+                const lowerFullCol1 = fullCol1.toLowerCase();
+                for (const keyInMap of departmentSearchKeys) {
+                    if (lowerFullCol1.includes(keyInMap)) {
+                        foundCity = departmentMap[keyInMap];
+                        break;
+                    }
+                }
+
+                const finalKey = (namePart === 'ADS EMPLEO' || !foundCity) ? namePart : `${namePart} / ${foundCity}`;
+                const valueString = (row[spendIdx] || '0').replace(/[^0-9.-]+/g,"");
+                const valueToSum = parseFloat(valueString) || 0;
+
+                if (groupedData.has(finalKey)) {
+                    const existingRow = groupedData.get(finalKey);
+                    const currentSum = parseFloat(existingRow[spendIdx]) || 0;
+                    existingRow[spendIdx] = currentSum + valueToSum;
+                    groupedData.set(finalKey, existingRow);
+                } else {
+                    const newRow = [...row];
+                    newRow[0] = finalKey;
+                    newRow[spendIdx] = valueToSum;
+                    groupedData.set(finalKey, newRow);
+                }
+            }
+
+            const newRows = [];
+            for (const row of groupedData.values()) {
+                row[spendIdx] = row[spendIdx].toFixed(2);
+                newRows.push(row);
+            }
+            return { header: data.header, rows: newRows };
+        }
+
+        function displayTable(data) {
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+            if (data.header.length > 0) {
+                const hr = document.createElement('tr');
+                data.header.forEach(h => {
+                    const th = document.createElement('th');
+                    th.textContent = h;
+                    th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap';
+                    hr.appendChild(th);
+                });
+                tableHeader.appendChild(hr);
+            }
+            if (data.rows.length > 0) {
+                data.rows.forEach(r => {
+                    if (r.length === 1 && r[0] === '') return;
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50';
+                    r.forEach(c => {
+                        const td = document.createElement('td');
+                        td.textContent = c;
+                        td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-700';
+                        row.appendChild(td);
+                    });
+                    tableBody.appendChild(row);
+                });
+            } else {
+                showEmptyMessage('Sin datos para mostrar.');
+            }
+        }
+
+        function resetTable() {
+            tableHeader.innerHTML = '';
+            tableBody.innerHTML = '';
+            showEmptyMessage('Por favor, carga un archivo CSV para ver los datos.');
+        }
+
+        function showEmptyMessage(msg) {
+             tableBody.innerHTML = `<tr><td colspan="100" class="px-6 py-10 text-center text-gray-500">${msg}</td></tr>`;
+        }
+
+        // --- Generador de Reporte ---
+
+        function populateSelector(rows, spendIdx) {
+            selectorContainer.innerHTML = '';
+            reportOutput.value = '';
+            cityFilterSelect.innerHTML = '<option value="Todas">-- Todas las ciudades --</option>';
+            const cities = new Set();
+            if (!rows || rows.length === 0) return;
+
+            rows.sort((a, b) => a[0].localeCompare(b[0]));
+
+            rows.forEach(row => {
+                const name = row[0];
+                const amount = row[spendIdx];
+                const parts = name.split(' / ');
+                let city = parts.length > 1 ? parts[parts.length - 1] : 'Sin Ciudad';
+                cities.add(city);
+
+                const div = document.createElement('div');
+                div.className = 'flex items-center mb-2';
+                div.dataset.city = city;
+                
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.id = `chk-${name.replace(/\s+/g, '-')}`;
+                input.className = 'h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer';
+                input.dataset.name = name;
+                input.dataset.amount = amount;
+                input.addEventListener('change', updateReportOutput);
+                
+                const label = document.createElement('label');
+                label.htmlFor = input.id;
+                label.textContent = `${name} (Bs. ${amount.replace('.', ',')})`;
+                label.className = 'ml-2 text-sm text-gray-700 select-none cursor-pointer';
+
+                div.appendChild(input);
+                div.appendChild(label);
+                selectorContainer.appendChild(div);
+            });
+
+            Array.from(cities).sort().forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c; opt.textContent = c;
+                cityFilterSelect.appendChild(opt);
+            });
+            cityFilterSelect.onchange = filterAsesoraList;
+        }
+
+        function filterAsesoraList() {
+            const sel = cityFilterSelect.value;
+            selectorContainer.querySelectorAll('div').forEach(d => {
+                d.style.display = (sel === 'Todas' || d.dataset.city === sel) ? 'flex' : 'none';
+            });
+        }
+
+        function toggleAllCheckboxes(checked) {
+            selectorContainer.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+                if (chk.closest('div').style.display !== 'none') chk.checked = checked;
+            });
+            updateReportOutput();
+        }
+
+        function clearReportAndSelection() {
+            selectorContainer.querySelectorAll('input[type="checkbox"]').forEach(chk => chk.checked = false);
+            updateReportOutput();
+        }
+
+        function updateReportOutput() {
+            const selected = document.querySelectorAll('#selectorContainer input[type="checkbox"]:checked');
+            let txt = '';
+            selected.forEach(chk => {
+                const nameOnly = chk.dataset.name.split(' / ')[0];
+                const amt = parseFloat(chk.dataset.amount).toFixed(2).replace('.', ',');
+                txt += `${nameOnly} – Bs.${amt}\n`;
+            });
+            reportOutput.value = txt;
+        }
+
+        function copyReportToClipboard() {
+            reportOutput.select();
+            document.execCommand('copy');
+            copyMessage.textContent = '¡Copiado!';
+            setTimeout(() => copyMessage.textContent = '', 2000);
+        }
+    </script>
+</body>
+</html>
