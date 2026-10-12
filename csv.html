@@ -38,7 +38,7 @@
         <div class="flex items-center my-4">
             <input id="groupCheckbox" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
             <label for="groupCheckbox" class="ml-2 block text-sm text-gray-700 font-medium">
-                Agrupar por Asesora y sumar "Importe gastado (BOB)"
+                Agrupar por Nombre/Ciudad y sumar "Monto gastado" (Columna B)
             </label>
         </div>
 
@@ -149,9 +149,10 @@
             'oruro': 'Oruro',
             'pando': 'Pando',
             'potosí': 'Potosí',
+            'potosi': 'Potosí',
             'santa cruz': 'Santa Cruz',
             'tarija': 'Tarija',
-            'sucre': 'SUCRE',
+            'sucre': 'Sucre',
             'el alto': 'El Alto',
             'scz': 'Santa Cruz'
         };
@@ -203,19 +204,18 @@
          * Busca el índice de la columna de importe gastado.
          */
         function findSpendColumnIndex(header) {
-            // Buscamos la coincidencia exacta o parcial ignorando mayúsculas
-            const target = "importe gastado (bob)".toLowerCase();
-            const targetSimple = "importe gastado".toLowerCase();
+            const target1 = "importe gastado".toLowerCase();
+            const target2 = "monto gastado".toLowerCase();
             
             let index = header.findIndex(h => {
                 const head = h.toLowerCase();
-                return head === target || head.includes(targetSimple);
+                return head.includes(target1) || head.includes(target2);
             });
 
-            // Si no se encuentra, por defecto usamos la columna 3 (índice 2)
+            // Si no se encuentra, por defecto usamos la columna B (índice 1)
             if (index === -1) {
-                index = 2; 
-                infoMessage.textContent = "Aviso: No se encontró la columna 'Importe gastado (BOB)'. Usando columna 3 por defecto.";
+                index = 1; 
+                infoMessage.textContent = "Aviso: No se detectó 'Monto gastado' en la cabecera. Usando columna B por defecto.";
             } else {
                 infoMessage.textContent = `Columna de gasto detectada: "${header[index]}"`;
             }
@@ -237,9 +237,9 @@
                     populateSelector(aggregatedData.rows, spendIdx);
                     reportGenerator.classList.remove('hidden');
                 } catch (err) {
-                     errorMessage.textContent = 'Error al agrupar.';
-                     displayTable(rawDataStore);
-                     reportGenerator.classList.add('hidden');
+                    errorMessage.textContent = 'Error al agrupar los datos.';
+                    displayTable(rawDataStore);
+                    reportGenerator.classList.add('hidden');
                 }
             } else {
                 displayTable(rawDataStore);
@@ -252,22 +252,41 @@
             if (!data.rows || data.rows.length === 0) return data;
 
             for (const row of data.rows) {
-                if (row.length <= spendIdx) continue;
+                // Si la fila no tiene al menos la columna del monto, la saltamos
+                if (row.length <= spendIdx && row.length < 2) continue;
 
                 const fullCol1 = row[0] || '';
-                let namePart = fullCol1.split('/')[0].trim();
-                if (namePart.startsWith('ADS EMPLEO')) namePart = 'ADS EMPLEO';
+                
+                // Dividir la columna A por "/"
+                const parts = fullCol1.split('/');
+                
+                // Extraer nombre (antes del primer /) y ciudad (después del primer /)
+                let namePart = parts.length > 0 ? parts[0].trim() : '';
+                let rawCity = parts.length > 1 ? parts[1].trim() : '';
+                
+                // Excepción si es ADS EMPLEO
+                if (namePart.toUpperCase().startsWith('ADS EMPLEO')) {
+                    namePart = 'ADS EMPLEO';
+                }
 
-                let foundCity = '';
-                const lowerFullCol1 = fullCol1.toLowerCase();
+                // Normalizar ciudad si coincide con alguna del mapa (opcional para mantener ordenado el filtro)
+                let foundCity = rawCity;
+                const lowerRawCity = rawCity.toLowerCase();
                 for (const keyInMap of departmentSearchKeys) {
-                    if (lowerFullCol1.includes(keyInMap)) {
+                    if (lowerRawCity.includes(keyInMap)) {
                         foundCity = departmentMap[keyInMap];
                         break;
                     }
                 }
 
-                const finalKey = (namePart === 'ADS EMPLEO' || !foundCity) ? namePart : `${namePart} / ${foundCity}`;
+                if (!foundCity && namePart !== 'ADS EMPLEO') {
+                    foundCity = 'Sin Ciudad';
+                }
+
+                // Llave final para agrupar: "Nombre / Ciudad"
+                const finalKey = (namePart === 'ADS EMPLEO') ? namePart : `${namePart} / ${foundCity}`;
+                
+                // Limpiar el valor del monto en columna B
                 const valueString = (row[spendIdx] || '0').replace(/[^0-9.-]+/g,"");
                 const valueToSum = parseFloat(valueString) || 0;
 
@@ -286,7 +305,7 @@
 
             const newRows = [];
             for (const row of groupedData.values()) {
-                row[spendIdx] = row[spendIdx].toFixed(2);
+                row[spendIdx] = parseFloat(row[spendIdx]).toFixed(2);
                 newRows.push(row);
             }
             return { header: data.header, rows: newRows };
@@ -345,10 +364,10 @@
             rows.sort((a, b) => a[0].localeCompare(b[0]));
 
             rows.forEach(row => {
-                const name = row[0];
+                const nameKey = row[0];
                 const amount = row[spendIdx];
-                const parts = name.split(' / ');
-                let city = parts.length > 1 ? parts[parts.length - 1] : 'Sin Ciudad';
+                const parts = nameKey.split(' / ');
+                let city = parts.length > 1 ? parts[1] : 'Sin Ciudad';
                 cities.add(city);
 
                 const div = document.createElement('div');
@@ -357,15 +376,16 @@
                 
                 const input = document.createElement('input');
                 input.type = 'checkbox';
-                input.id = `chk-${name.replace(/\s+/g, '-')}`;
+                input.id = `chk-${nameKey.replace(/[^a-zA-Z0-9]/g, '-')}`;
                 input.className = 'h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer';
-                input.dataset.name = name;
+                input.dataset.name = nameKey;
                 input.dataset.amount = amount;
                 input.addEventListener('change', updateReportOutput);
                 
                 const label = document.createElement('label');
                 label.htmlFor = input.id;
-                label.textContent = `${name} (Bs. ${amount.replace('.', ',')})`;
+                // Mostrar con coma decimal en las opciones visuales de checkbox también
+                label.textContent = `${nameKey} (Bs. ${amount.replace('.', ',')})`;
                 label.className = 'ml-2 text-sm text-gray-700 select-none cursor-pointer';
 
                 div.appendChild(input);
@@ -404,7 +424,8 @@
             const selected = document.querySelectorAll('#selectorContainer input[type="checkbox"]:checked');
             let txt = '';
             selected.forEach(chk => {
-                const nameOnly = chk.dataset.name.split(' / ')[0];
+                const nameOnly = chk.dataset.name.split(' / ')[0].trim();
+                // Aquí aplicamos el formato con coma para el resultado final
                 const amt = parseFloat(chk.dataset.amount).toFixed(2).replace('.', ',');
                 txt += `${nameOnly} – Bs.${amt}\n`;
             });
